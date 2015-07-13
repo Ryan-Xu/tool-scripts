@@ -1,0 +1,274 @@
+#!/bin/bash
+
+# ##############################################
+# 函数名： get_hostinfo
+# 入参：
+# 返回：Succes:0, error: 1
+# 函数功能：获取主机基本配置信息
+# ##############################################
+get_hostinfo()
+{
+  echo "<inner_group type=\"hostinfo\" keyfield=\"caption\">"
+  echo "<mo caption=\""$HOSTNAME":hostinfo\">" 
+  
+  uname -r|awk '{printf("<attribute name=\"os_version\" value=\"%s\"/>\n",$0)}'
+  uname -m|awk '{printf("<attribute name=\"model\" value=\"%s\"/>\n",$0)}'
+  
+  echo "</mo>"
+  echo "</inner_group>"
+}
+
+# ##############################################
+# 函数名： get_cpuinfo
+# 入参：
+# 返回：Succes:0, error: 1
+# 函数功能：获取主机CPU信息
+# ##############################################
+get_cpuinfo()
+{
+  HOSTNAME=`hostname`;        
+  TIME=`date +%Y-%m-%d' '%H:%M:%S`
+  export TIME
+  echo "<inner_group type=\"host_cpu\" keyfield=\"caption\">"
+  echo "<mo caption=\""$HOSTNAME":CPU\">" 
+
+  sar 1 2|awk '{usr=$3;sys=$5;wio=$4;idle=$6;};END{ \
+  printf("<performance time=\"%s\" column_count=\"5\" key_column=\"-1\">",time); \
+  printf("cpu_user@cpu_sys@cpu_wait@cpu_idle@cpu_used@%s@%s@%s@%s@%s",usr/100,sys/100,wio/100,idle/100,(usr+sys)/100); \
+  printf("</performance>\n"); \
+  }' time="$TIME"
+
+  echo "</mo>"
+  echo "</inner_group>"
+}
+
+
+# ##############################################
+# 函数名： get_filesystem
+# 入参：
+# 返回：Succes:0, error: 1
+# 函数功能：获取主机文件系统信息
+# ##############################################
+get_filesystem()
+{
+  TIME=`date +%Y-%m-%d' '%H:%M:%S`
+  export TIME
+  HOSTNAME=`hostname`;
+  
+  echo "<inner_group type=\"filesystem\" keyfield=\"caption\">"
+  export LANG=C
+  df -k|grep -v Filesystem|grep -v "文件系统"|grep -v cdrom|awk 'BEGIN{s=""}{if(s!=""){printf("%s%s\n",s,$0); \
+  s=""}else if(NF<6){s=$0}else{print $0}}'|awk '{gsub("%",""); \
+  printf("<mo caption=\"%s:%s\">\n",hostname,$6); \
+  printf("<attribute name=\"dev\" value=\"%s\" />\n",$1); \
+  printf("<attribute name=\"mount\" value=\"%s\" />\n",$6); \
+  printf("<attribute name=\"size\" value=\"%s\" />\n",$2*1024); \
+  printf("<performance time=\"%s\" column_count=\"3\" key_column=\"-1\">",time); \
+  printf("used@free@usepct@%s@%s@%s",$3*1024,$4*1024,$5/100); \
+  printf("</performance>\n</mo>\n");}' time="$TIME" hostname="$HOSTNAME"
+  echo "</inner_group>";
+
+  echo "<inner_group type=\"filesystem\" keyfield=\"mount\">"
+  for i in `df -k|grep -v Filesystem|grep -v cdrom|grep -v "文件系统"|grep "%" |awk '{print $NF}'`
+  do
+      echo "<mo caption=\"$HOSTNAME:$i\">\n";
+      echo "<attribute name=\"mount\" value=\"$i\" />";
+      value=`df -i $i 2>/dev/null|grep -v Filesystem|grep -v "文件系统"|wc -l`
+      if [ $value -eq 1 ];then
+      df -i $i 2>/dev/null|grep -v Filesystem|grep -v "文件系统"|awk '{gsub("%",""); \
+      printf("<attribute name=\"isize\" value=\"%s\" />\n",$2); \
+      printf("<performance time=\"%s\" column_count=\"3\" key_column=\"-1\">",time); \
+      printf("iused@ifree@iusepct@%s@%s@%s",$3,$4,$5/100); \
+      printf("</performance>\n");}' time="$TIME";
+      echo "</mo>";
+      else
+      df -i $i 2>/dev/null|grep -v Filesystem|grep -v "文件系统"|grep "%" |awk '{gsub("%",""); \
+      printf("<attribute name=\"isize\" value=\"%s\" />\n",$1); \
+      printf("<performance time=\"%s\" column_count=\"3\" key_column=\"-1\">",time); \
+      printf("iused@ifree@iusepct@%s@%s@%s",$2,$3,$4/100); \
+      printf("</performance>\n");}' time="$TIME";
+      echo "</mo>";
+      fi
+  done
+  echo "</inner_group>"
+}
+
+
+# ##############################################
+# 函数名： get_boottime
+# 入参：
+# 返回：Succes:0, error: 1
+# 函数功能：获取主机启动时间
+# ##############################################
+get_boottime()
+{
+  TIME=`date +%Y-%m-%d' '%H:%M:%S`
+  export TIME
+  
+  echo "<inner_group type=\"boottime\" keyfield=\"caption\">"
+  echo "<mo caption=\""$HOSTNAME":boottime\">" 
+
+  D1=`date +%s`
+  D2=`cat /proc/uptime|awk '{printf("%i",$1)}'`
+  D3=`expr $D1 - $D2`
+  if [ -s logs/boottime ]
+  then
+    D4=`cat logs/boottime`
+    D6=$D4
+    if [ -s logs/lastboottime ]
+    then
+      D6=`cat logs/lastboottime`
+    fi
+    echo $D3 > logs/lastboottime
+    D5=`expr $D3 - $D6`
+    if [ $D5 -lt 610 -a $D5 -gt -610 ]
+    then
+      D3=$D4
+    else
+      echo $D4" "$D6 >> logs/lasttime
+      echo $D3 > logs/boottime
+    fi
+  fi
+  D4=`date -d "1970-01-01 UTC $D3 seconds" "+%Y-%m-%d %H:%M:%S"`
+  echo "<performance time=\"$TIME\" column_count=\"1\">boot_time@$D4</performance>"
+  
+  if [ ! -e "boottime" ]
+  then
+    mkdir boottime
+    echo $D3 >./boottime/hoststar.log
+    else
+    if [  -f "./boottime/hoststar.log" ]
+      then
+      last_startime=`cat ./boottime/hoststar.log`
+      this_time=$D3
+      time_tt=`expr $last_startime - $this_time|sed 's/-//'`
+      last_start=`date -d "1970-01-01 UTC $last_startime seconds" "+%Y-%m-%d %H:%M:%S"`
+        if [ $time_tt -gt 30 ]
+          then
+          echo "<alarm source = \"host\" code = \"Host reboot\"  grade = \"2\" time = \"$TIME\">The host at ${last_start} reboot</alarm>"
+        fi
+        echo $D3 >./boottime/hoststar.log
+      else  
+      echo $D3 >./boottime/hoststar.log
+    fi
+  fi
+  
+  echo "</mo>"
+  echo "</inner_group>"
+}
+
+# ##############################################
+# 函数名： get_meminfo
+# 入参：
+# 返回：Succes:0, error: 1
+# 函数功能：获取主机内存信息
+# ##############################################
+get_meminfo()
+{
+  HOSTNAME=`hostname`;
+  TIME=`date +%Y-%m-%d' '%H:%M:%S`
+  export TIME
+  echo "<inner_group type=\"host_mem\" keyfield=\"caption\">"
+  echo "<mo caption=\""$HOSTNAME":Mem\">"
+    
+  MEMSIZE=`free|grep -i mem|awk '{print $2*1024}'`
+  usedMEM=`free|grep -i mem|awk '{print $3}'`
+  memused=`echo "${usedMEM} ${MEMSIZE}"|awk '{printf("%.2f",$1/($2/1024))}'`
+  SWAPSIZE=`free|grep -i swap|awk '{print $2*1024}'`
+  echo "<attribute name=\"size\" value=\"$MEMSIZE\"/>"
+  echo "<attribute name=\"swap\" value=\"$SWAPSIZE\"/>"
+  if [ "${SWAPSIZE}" != "0" ];then
+  free|awk 'BEGIN{printf("<performance time=\"%s\" column_count=\"2\" key_column=\"-1\">real_used@swap_used",ENVIRON["TIME"])}\
+  {if($1~/([Mm][Ee][Mm]|[Ss][Ww][Aa][Pp])/)printf("@%s",$3/($2+$7))}END{print "</performance>"}'
+  else
+  echo "<performance time=\"$TIME\" column_count=\"2\" key_column=\"-1\">real_used@swap_used@$memused@0</performance>"
+  fi
+  
+  echo "</mo>"
+  echo "</inner_group>"
+}
+
+# ##############################################
+# 函数名： get_netcardinfo
+# 入参：
+# 返回：Succes:0, error: 1
+# 函数功能：获取主机网卡信息
+# ##############################################
+get_netcardinfo()
+{      
+  TIME=`date +%Y-%m-%d' '%H:%M:%S`
+  export TIME
+  
+  net_infor=`cat /proc/net/dev |grep -v Receive|grep -v face|grep -v lo|grep -v sit`
+  total=`echo "$net_infor"|wc -l`
+  index=1
+  
+  echo "<inner_group type=\"netcard_info\" keyfield=\"caption\">"
+  while [ $index -le $total ]
+  do
+    net_infor1=`cat /proc/net/dev |grep -v Receive|grep -v face|grep -v lo|grep -v sit|sed -n "$index,$index p"`
+    
+    card=`echo "$net_infor1"|awk -F ':' '{print $1}'|sed 's/[ ]//g'`
+    Out_Bytes1=`echo "$net_infor1"|awk '{print $10}'`
+    In_Bytes1=`echo "$net_infor1"|awk '{print $2}'`
+
+    sleep 5
+    
+    net_infor2=`cat /proc/net/dev |grep -v Receive|grep -v face|grep -v lo|grep -v sit|sed -n "$index,$index p"`
+    Out_Bytes2=`echo "$net_infor2"|awk '{print $10}'`
+    In_Bytes2=`echo "$net_infor2"|awk '{print $2}'`
+    
+    Out_Bytes=`echo "$Out_Bytes2 $Out_Bytes1"|awk '{print ($1-$2)/5.0/1024.0}'`
+    In_Bytes=`echo "$In_Bytes2 $In_Bytes1"|awk '{print ($1-$2)/5.0/1024.0}'`
+  
+    echo "<mo caption=\"$card\">"
+    echo "<performance time=\"$TIME\" column_count=\"2\" key_column=\"-1\">KB_In@KB_Out@$In_Bytes@$Out_Bytes</performance>";
+    echo "</mo>"
+    index=`expr $index + 1`
+  done
+  echo "</inner_group>"
+}
+
+# ##############################################
+# 函数名： get_PortInfo
+# 入参：login_port
+# 返回：Succes:0, error: 1
+# 函数功能：获取主机端口信息
+# ##############################################
+get_PortInfo()
+{
+  if [ "$1" = "" ];then  
+    return
+  fi
+  instancelist="$1,"
+  instancenum=`echo $instancelist|awk -F "," '{print NF-1}'`
+  TIME=`date +%Y-%m-%d' '%H:%M:%S`
+  export TIME
+  
+  echo "<inner_group type=\"HostPortStatus\" keyfield=\"caption\">"
+  instancei=1
+  while [ $instancei -le $instancenum ]
+  do  
+    instance=`echo ${instancelist}|awk -F "," '{print $"'$instancei'"}'`
+    echo "<mo caption=\"Port $instance\">"
+
+    PortInfoAll=`netstat -an|grep $instance`
+    connectNo=`echo "$PortInfoAll"|grep -v grep|wc -l`
+    TIME_WAITNO=`echo "$PortInfoAll"|grep -v grep|grep TIME_WAIT|wc -l`
+    CLOSE_WAITNo=`echo "$PortInfoAll"|grep -v grep|grep CLOSE_WAIT|wc -l`
+    ESTABLISHEDNo=`echo "$PortInfoAll"|grep -v grep|grep ESTABLISHED|wc -l`
+    FIN_WAIT1No=`echo "$PortInfoAll"|grep -v grep|grep FIN_WAIT1|wc -l`
+    FIN_WAIT2No=`echo "$PortInfoAll"|grep -v grep|grep FIN_WAIT2|wc -l`
+    SYN_RECVNo=`echo "$PortInfoAll"|grep -v grep|grep SYN_RECV|wc -l`
+    CLOSINGNo=`echo "$PortInfoAll"|grep -v grep|grep CLOSING|wc -l`
+    LAST_ACKNo=`echo "$PortInfoAll"|grep -v grep|grep LAST_ACK|wc -l`
+    portNo=$instance
+    echo "<performance time=\"$TIME\" column_count=\"10\">portNo@connectNo@TIME_WAITNO@CLOSE_WAITNo@ESTABLISHEDNo\
+    @FIN_WAIT1No@FIN_WAIT2No@SYN_RECVNo@CLOSINGNo@LAST_ACKNo@$portNo@$connectNo@$TIME_WAITNO\
+    @$CLOSE_WAITNo@$ESTABLISHEDNo@$FIN_WAIT1No@$FIN_WAIT2No@$SYN_RECVNo@\
+    $CLOSINGNo@$LAST_ACKNo</performance>" 
+    echo "</mo>"
+    instancei=`expr $instancei + 1`
+  done
+  echo "</inner_group>"
+}

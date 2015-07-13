@@ -1,0 +1,12 @@
+# menu title and cmd define
+MENU_TITLE[0]="Monitor CPU information"
+MENU_CMD[0]="monitor_cpuinfo"
+
+MENU_TITLE[1]="Monitor memory information"
+MENU_CMD[1]="monitor_meminfo"
+
+MENU_TITLE[2]="Monitor disk information"
+MENU_CMD[2]="monitor_diskinfo"
+
+MENU_TITLE[2]="Monitor network information"
+MENU_CMD[2]="monitor_netcard"

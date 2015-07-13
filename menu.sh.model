@@ -1,0 +1,95 @@
+#!/bin/sh
+# menu
+
+. ./monitorHost_lib
+
+init_menu()
+{
+  . ./menu.model
+  
+  # set the date, user and hostname up
+  MYDATE=`date +%d/%m/%Y`
+  THIS_HOST=`hostname -s`
+  USER=`whoami`
+  
+  # loop forever
+  while :
+  do
+    # clear the screen
+    tput clear
+    # here documents starts here
+    cat <<MENUTITLE1
+-------------------------------------------------------------
+User: $USER            Host: $THIS_HOST         Date: $MYDATE
+-------------------------------------------------------------
+MENUTITLE1
+
+    for((i=0; i<${#MENU_TITLE[*]}; i++))
+    do
+      #echo "$i: ${MENU_TITLE[$i]}"
+      cat <<MENUTITLE2
+               $i: ${MENU_TITLE[$i]}
+MENUTITLE2
+    done
+
+    cat <<MENUTITLE3
+               H: Help screen
+               Q: Exit Menu
+-------------------------------------------------------------
+MENUTITLE3
+    # here documents finished
+  
+    maxidx=`expr ${#MENU_CMD[*]} - 1`
+    echo -e -n "Your Choice [0-$maxidx,H,Q] > "
+    #read CHOICE
+    CHOICE=`get_char`
+    echo -e "\r"
+
+#set -x
+    matchCmd=0
+    for((i=0; i<${#MENU_CMD[*]}; i++))
+    do
+      if [ $CHOICE = $i ]; then
+        ${MENU_CMD[$i]}
+        matchCmd=1
+      fi
+    done
+
+    if [ $matchCmd -ne 1 ]; then
+    if [ $CHOICE = "H" -o $CHOICE = "h" ]; then
+      tput clear
+      cat << MAYDAY
+    This is the help screen, nothing here yet to help you!
+MAYDAY
+    elif [ $CHOICE = "Q" -o $CHOICE = "q" ]; then
+      exit 0
+    else
+      echo -e "\007unkonwn user response"
+    fi
+    fi
+#set +x
+
+    echo -e -n "Hit the return key to contiue"
+    read DUMMY
+  done
+  
+}
+
+# just read a single key please
+get_char()
+{
+  # save current stty setting
+  SAVEDSTTY=`stty -g`
+  stty cbreak
+  dd if=/dev/tty bs=1 count=1 2>/dev/null
+  stty -cbreak
+  #restore stty
+  stty $SAVEDSTTY
+}
+
+main()
+{
+  init_menu
+}
+
+main $*
