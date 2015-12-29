@@ -13,6 +13,8 @@ import time
 #import socket
 #import pdb
 
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 
 class GatherFileList:
