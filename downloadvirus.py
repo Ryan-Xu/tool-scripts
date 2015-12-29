@@ -16,7 +16,6 @@ import time
 reload(sys)
 sys.setdefaultencoding('utf8')
 
-
 class GatherFileList:
     def __init__(self, baseurl, headers):
         self.baseurl = baseurl
